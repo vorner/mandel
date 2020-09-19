@@ -7,3 +7,10 @@ edition = "2018"
 [dependencies]
 anyhow = "~1"
 image = "~0.23"
+
+[dev-dependencies]
+criterion = "~0.3"
+
+[[bench]]
+name = "compare"
+harness = false
