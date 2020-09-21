@@ -302,6 +302,7 @@ dependencies = [
  "anyhow",
  "criterion",
  "image",
+ "rayon",
 ]
 
 [[package]]
