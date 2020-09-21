@@ -3,7 +3,7 @@ use std::ops::{Add, Mul, Sub};
 use multiversion::multiversion;
 use rayon::prelude::*;
 use slipstream::types::*;
-use slipstream::{Mask, Vector};
+use slipstream::Vector;
 
 pub type Image = Vec<Vec<u8>>;
 
@@ -11,7 +11,7 @@ pub trait Compute {
     fn compute(&self, image: &mut Image, pix_size: f32);
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Default)]
 struct Complex<T> {
     r: T,
     i: T,
@@ -60,7 +60,7 @@ where
 const LIMIT: f32 = 16.0;
 
 #[inline]
-fn scalar_row(row: &mut Vec<u8>, i: f32, x_off: f32, pix_size: f32) {
+fn scalar_row(row: &mut [u8], i: f32, x_off: f32, pix_size: f32) {
     for (x, pix) in row.iter_mut().enumerate() {
         *pix = 255;
         let c = Complex {
@@ -109,47 +109,43 @@ impl Compute for Parallel {
     }
 }
 
-const L: usize = 4;
-type V = f32x4;
+type V = f32x16;
+type I = i32x16;
+const L: usize = V::LANES;
 
 #[multiversion]
 #[clone(target = "[x86|x86_64]+sse+sse2+sse3+sse4.1+avx+avx2+fma")]
 #[clone(target = "[x86|x86_64]+sse+sse2+sse3+sse4.1+avx")]
 #[clone(target = "[x86|x86_64]+sse+sse2+sse3+sse4.1")]
-fn vector_row(row: &mut Vec<u8>, i: f32, x_off: f32, pix_size: f32) {
+fn vector_row(row: &mut [u8], i: f32, x_off: V, pix_size: f32) {
     assert!(row.len() % L == 0);
-    let x_off = (0..L).map(|i| i as f32 * pix_size + x_off).collect::<Vec<_>>();
-    let x_off = V::new(x_off);
-    let i = V::splat(i);
-    let zeroes = V::default();
-    let limit = V::splat(LIMIT);
 
     for x_grp in 0..row.len() / L {
-        let mut set = [false, false, false, false];
+        let mut iter_cnt = I::splat(0);
+        let mut inc = I::splat(1);
         let x_pos = L * x_grp;
-        for i in 0..L {
-            row[x_pos + i] = 255;
-        }
 
         let c = Complex {
             r: x_off + V::splat(x_pos as f32 * pix_size),
-            i,
+            i: V::splat(i),
         };
 
-        let mut z = Complex { r: zeroes, i: zeroes };
+        let mut z = Complex::default();
 
-        for i in 0..255 {
+        for _ in 0..255 {
             z = z * z + c;
-            let over_limit = z.len_sq().ge(limit);
-            for (j, (over, set)) in (over_limit.iter().zip(set.iter_mut())).enumerate() {
-                if over.bool() && !*set {
-                    *set = true;
-                    row[x_pos + j] = i;
-                }
-            }
-            if set.iter().all(|s| *s) {
+            let over_limit = z.len_sq().ge(V::splat(LIMIT));
+
+            inc = inc.blend(I::default(), over_limit);
+            iter_cnt += inc;
+
+            if inc == I::default() {
                 break;
             }
+        }
+
+        for (i, v) in iter_cnt.iter().enumerate() {
+            row[x_pos + i] = *v as u8;
         }
     }
 }
@@ -162,6 +158,11 @@ impl Compute for Simd {
         let w = image[0].len();
         let x_off = - (w as f32) / 2.0 * pix_size;
         let y_off = - (h as f32) / 2.0 * pix_size;
+
+        // TODO: Collect
+        let x_off = (0..L).map(|i| i as f32 * pix_size + x_off).collect::<Vec<_>>();
+        let x_off = V::new(x_off);
+
         image
             .par_iter_mut()
             .enumerate()
