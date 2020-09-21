@@ -1,6 +1,9 @@
 use std::ops::{Add, Mul, Sub};
 
+use multiversion::multiversion;
 use rayon::prelude::*;
+use slipstream::types::*;
+use slipstream::{Mask, Vector};
 
 pub type Image = Vec<Vec<u8>>;
 
@@ -102,6 +105,68 @@ impl Compute for Parallel {
             .enumerate()
             .for_each(|(y, row)| {
                 scalar_row(row, y_off + (y as f32) * pix_size, x_off, pix_size);
+            });
+    }
+}
+
+const L: usize = 4;
+type V = f32x4;
+
+#[multiversion]
+#[clone(target = "[x86|x86_64]+sse+sse2+sse3+sse4.1+avx+avx2+fma")]
+#[clone(target = "[x86|x86_64]+sse+sse2+sse3+sse4.1+avx")]
+#[clone(target = "[x86|x86_64]+sse+sse2+sse3+sse4.1")]
+fn vector_row(row: &mut Vec<u8>, i: f32, x_off: f32, pix_size: f32) {
+    assert!(row.len() % L == 0);
+    let x_off = (0..L).map(|i| i as f32 * pix_size + x_off).collect::<Vec<_>>();
+    let x_off = V::new(x_off);
+    let i = V::splat(i);
+    let zeroes = V::default();
+    let limit = V::splat(LIMIT);
+
+    for x_grp in 0..row.len() / L {
+        let mut set = [false, false, false, false];
+        let x_pos = L * x_grp;
+        for i in 0..L {
+            row[x_pos + i] = 255;
+        }
+
+        let c = Complex {
+            r: x_off + V::splat(x_pos as f32 * pix_size),
+            i,
+        };
+
+        let mut z = Complex { r: zeroes, i: zeroes };
+
+        for i in 0..255 {
+            z = z * z + c;
+            let over_limit = z.len_sq().ge(limit);
+            for (j, (over, set)) in (over_limit.iter().zip(set.iter_mut())).enumerate() {
+                if over.bool() && !*set {
+                    *set = true;
+                    row[x_pos + j] = i;
+                }
+            }
+            if set.iter().all(|s| *s) {
+                break;
+            }
+        }
+    }
+}
+
+pub struct Simd;
+
+impl Compute for Simd {
+    fn compute(&self, image: &mut Image, pix_size: f32) {
+        let h = image.len();
+        let w = image[0].len();
+        let x_off = - (w as f32) / 2.0 * pix_size;
+        let y_off = - (h as f32) / 2.0 * pix_size;
+        image
+            .par_iter_mut()
+            .enumerate()
+            .for_each(|(y, row)| {
+                vector_row(row, y_off + (y as f32) * pix_size, x_off, pix_size);
             });
     }
 }

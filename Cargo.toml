@@ -7,7 +7,9 @@ edition = "2018"
 [dependencies]
 anyhow = "~1"
 image = { version = "~0.23", default-features = false, features = ["ico"] }
+multiversion = "0.6"
 rayon = "~1"
+slipstream = "~0.1.1"
 
 [dev-dependencies]
 criterion = "~0.3"
@@ -15,3 +17,6 @@ criterion = "~0.3"
 [[bench]]
 name = "compare"
 harness = false
+
+[profile.bench]
+debug = 2
