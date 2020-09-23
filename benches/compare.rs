@@ -1,10 +1,10 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use mandel::{Base, Compute, Image, Parallel, Simd};
 
-const SIZE: usize = 1024;
+const SIZE: usize = 4096;
 
 fn compute<C: Compute>(compute: &C, fractal: &mut Image) {
-    compute.compute(fractal, 0.00625);
+    compute.compute(fractal, 0.00625 / 4.0);
 }
 
 fn criterion_benchmark(c: &mut Criterion) {

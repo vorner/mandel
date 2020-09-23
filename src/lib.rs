@@ -2,8 +2,7 @@ use std::ops::{Add, Mul, Sub};
 
 use multiversion::multiversion;
 use rayon::prelude::*;
-use slipstream::types::*;
-use slipstream::Vector;
+use packed_simd::{f32x8, i32x8, SimdVector};
 
 pub type Image = Vec<Vec<u8>>;
 
@@ -109,8 +108,8 @@ impl Compute for Parallel {
     }
 }
 
-type V = f32x16;
-type I = i32x16;
+type V = f32x8;
+type I = i32x8;
 const L: usize = V::LANES;
 
 #[multiversion]
@@ -136,7 +135,7 @@ fn vector_row(row: &mut [u8], i: f32, x_off: V, pix_size: f32) {
             z = z * z + c;
             let over_limit = z.len_sq().ge(V::splat(LIMIT));
 
-            inc = inc.blend(I::default(), over_limit);
+            inc = over_limit.select(I::default(), inc);
             iter_cnt += inc;
 
             if inc == I::default() {
@@ -144,8 +143,8 @@ fn vector_row(row: &mut [u8], i: f32, x_off: V, pix_size: f32) {
             }
         }
 
-        for (i, v) in iter_cnt.iter().enumerate() {
-            row[x_pos + i] = *v as u8;
+        for i in 0..L {
+            row[x_pos + i] = iter_cnt.extract(i) as u8;
         }
     }
 }
@@ -161,7 +160,7 @@ impl Compute for Simd {
 
         // TODO: Collect
         let x_off = (0..L).map(|i| i as f32 * pix_size + x_off).collect::<Vec<_>>();
-        let x_off = V::new(x_off);
+        let x_off = V::from_slice_unaligned(&x_off);
 
         image
             .par_iter_mut()

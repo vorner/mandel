@@ -10,6 +10,7 @@ image = { version = "~0.23", default-features = false, features = ["ico"] }
 multiversion = "0.6"
 rayon = "~1"
 slipstream = "~0.1.1"
+packed_simd = { git = "https://github.com/rust-lang/packed_simd" }
 
 [dev-dependencies]
 criterion = "~0.3"
