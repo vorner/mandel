@@ -2,7 +2,7 @@ use std::ops::{Add, Mul, Sub};
 
 use multiversion::multiversion;
 use rayon::prelude::*;
-use packed_simd::{f32x8, i32x8, SimdVector};
+use packed_simd::{f32x8, u8x8, SimdVector};
 
 pub type Image = Vec<Vec<u8>>;
 
@@ -109,7 +109,7 @@ impl Compute for Parallel {
 }
 
 type V = f32x8;
-type I = i32x8;
+type I = u8x8;
 const L: usize = V::LANES;
 
 #[multiversion]
@@ -143,9 +143,7 @@ fn vector_row(row: &mut [u8], i: f32, x_off: V, pix_size: f32) {
             }
         }
 
-        for i in 0..L {
-            row[x_pos + i] = iter_cnt.extract(i) as u8;
-        }
+        iter_cnt.write_to_slice_unaligned(&mut row[x_pos..x_pos + L]);
     }
 }
 
