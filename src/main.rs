@@ -1,6 +1,8 @@
 use anyhow::Error;
 use image::{ImageBuffer, Luma};
-use mandel::{Compute, Simd};
+
+use mandel::Compute;
+use mandel::packed::Simd;
 
 const SIZE: usize = 512;
 

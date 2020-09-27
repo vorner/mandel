@@ -1,5 +1,8 @@
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use mandel::{Base, Compute, Image, Parallel, Simd};
+
+use mandel::{Compute, Image};
+use mandel::packed::Simd;
+use mandel::scalar::{Base, Parallel};
 
 const SIZE: usize = 1024;
 
