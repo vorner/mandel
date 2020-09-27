@@ -2,6 +2,7 @@ use std::ops::{Add, Mul, Sub};
 
 pub mod packed;
 pub mod scalar;
+pub mod slipstream;
 
 pub type Image = Vec<Vec<u8>>;
 
